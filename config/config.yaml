@@ -1,0 +1,3 @@
+pretrained: 1
+vgg16_path: /home/wyq/DeepMeshFlow/pretrained_model/vgg16-00b39a1b.pth
+num_classes: 3
