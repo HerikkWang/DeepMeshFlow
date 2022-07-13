@@ -148,6 +148,6 @@ class feature_extractore_FCN8s(nn.Module):
 if __name__ == "__main__":
     from config.option import args
     from torchsummary import summary
-    print(summary(feature_extractore_FCN8s(args), (3, 128, 128), device='cpu'))
+    print(summary(feature_extractore_FCN8s(21), (3, 128, 128), device='cpu'))
 
         
