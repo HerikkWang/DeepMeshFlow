@@ -131,10 +131,10 @@ def resnet18():
     """
     return ResNet(BasicBlock, [2, 2, 2, 2])
 
-def resnet34():
+def resnet34(in_channels=2):
     """ return a ResNet 34 object
     """
-    return ResNet(BasicBlock, [3, 4, 6, 3], 2)
+    return ResNet(BasicBlock, [3, 4, 6, 3], in_channels)
 
 def resnet50():
     """ return a ResNet 50 object
