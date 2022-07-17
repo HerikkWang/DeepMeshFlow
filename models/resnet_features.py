@@ -71,6 +71,7 @@ class BottleNeck(nn.Module):
     def forward(self, x):
         return nn.ReLU(inplace=True)(self.residual_function(x) + self.shortcut(x))
 
+# classification head of ResNet is removed.
 class ResNet(nn.Module):
 
     def __init__(self, block, num_block, in_channels=2):
