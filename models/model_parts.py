@@ -1,6 +1,6 @@
 from tracemalloc import start
 from mesh_flow_upsample import mesh_flow_upsampling
-from resnet_features import resnet34
+from resnet_features import ResNet, resnet34, BasicBlock
 from typing import *
 import torch.nn as nn
 import torch
@@ -58,7 +58,21 @@ class mask_predictor(nn.Module):
         out = self.predictor(x)
         return out
 
-mesh_estimator_body = resnet34()
+class mesh_selector(nn.Module):
+    def __init__(self, in_channels=2, out_shape=(3, 17, 17)) -> None:
+        super().__init__()
+        self.out_shape = out_shape
+        self.out_feature_num = out_shape[0] * out_shape[1] * out_shape[2]
+        self.features = ResNet(BasicBlock, [2, 2, 2, 2], in_channels)
+        self.fc = nn.Linear(512, self.out_feature_num)
+    
+    def forward(self, x):
+        out = self.features(x)
+        out = self.fc(out)
+        out = out.view(-1, self.out_shape[0], self.out_shape[1], self.out_shape[2])
+        return out
+
+mesh_estimator_body = resnet34(in_channels=2)
 
 class mesh_estimator_head(nn.Module):
     def __init__(self, mesh_grid_size:Tuple[int], upsample_size:Tuple[int], image_size:Tuple[int]) -> None:
@@ -68,21 +82,21 @@ class mesh_estimator_head(nn.Module):
         self.image_size = image_size
         fc_out_size = mesh_grid_size[0] * mesh_grid_size[1] * 2
         self.fc1 = nn.Sequential(
-            nn.Linear(1024, 1024),
+            nn.Linear(512, 1024),
             nn.ReLU(),
         )
-        self.fc2 = nn.Sequential(
-            nn.Linear(1024, 2048),
-            nn.ReLU(),
-        )
+        # self.fc2 = nn.Sequential(
+        #     nn.Linear(1024, 2048),
+        #     nn.ReLU(),
+        # )
 
         self.fc3 = nn.Sequential(
-            nn.Linear(2048, fc_out_size),
+            nn.Linear(1024, fc_out_size),
         )
     
     def forward(self, x):
         out = self.fc1(x)
-        out = self.fc2(out)
+        # out = self.fc2(out)
         out = self.fc3(out)
         out = out.view(out.shape[0], 2, self.mesh_grid_size[0], self.mesh_grid_size[1])
         if self.upsample_size != self.mesh_grid_size:

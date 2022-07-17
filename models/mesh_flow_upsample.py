@@ -65,7 +65,6 @@ def mesh_flow_upsampling(mesh_flow_tensor:torch.Tensor, mesh_grid_size:Tuple[int
     # step 8: fold back transform points to mesh grid
     fold = torch.nn.Fold(output_size = (upsample_grid_size[0], upsample_grid_size[1]), kernel_size=unfold_kernel_size, stride=unfold_stride)
     warped_grid_dense = fold(warped_unfold_grid_dense)
-    print(torch.arange(start=0, end=upsample_grid_size[1], step=mesh_grid_size[1] - 1, dtype=torch.long))
     X, Y = torch.meshgrid(torch.arange(start=0, end=upsample_grid_size[0], step=mesh_grid_size[0] - 1, dtype=torch.long),
         torch.arange(start=0, end=upsample_grid_size[0], step=mesh_grid_size[0] - 1, dtype=torch.long),
         indexing="xy"
