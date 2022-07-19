@@ -1,10 +1,9 @@
-from tracemalloc import start
+import torch.nn as nn
+from typing import *
+
 from mesh_flow_upsample import mesh_flow_upsampling
 from resnet_features import ResNet, resnet34, BasicBlock
-from typing import *
-import torch.nn as nn
-import torch
-import torchgeometry
+
 
 
 class feature_extractor(nn.Module):

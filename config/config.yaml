@@ -1,3 +1,28 @@
-pretrained: 1
-vgg16_path: /home/wyq/DeepMeshFlow/pretrained_model/vgg16-00b39a1b.pth
-num_classes: 3
+# hyper-parameters for deep homography network training
+stage: train
+image_size: !!python/tuple[128, 128]
+mesh_size_1: !!python/tuple[2, 2]
+mesh_size_2: !!python/tuple[5, 5]
+mesh_size_3: !!python/tuple[17, 17]
+epoch: 100
+# loss_weight:
+#  - 1.
+#  - 4.
+#  - 16.
+batch_size: 8
+lr: 1.0e-4
+weight_decay: 0.96
+print_every_iter: 50
+record_every_iter: 250
+save_every_epoch: 30
+share: 1
+train_data: /home/wyq/DeepImageStitching-pytorch/align_data/train/
+test_data: /home/wyq/DeepImageStitching-pytorch/align_data/test/
+# change the order of target image and reference image
+data_inverse: 0
+# randomly change the order of target image and reference image in training stage
+data_random_inverse: 1
+# argument for colorjitter data augmentation
+brightness: 0.3
+contrast: 0.2
+saturation: 0.2
