@@ -4,12 +4,12 @@ import torchgeometry
 import torch.nn as nn
 import torch
 
-def solve_mesh_flow_DLT(mesh_flow: torch.Tensor, device: torch.device, patch_size: Tuple[int], image_size: Tuple[int]) -> torch.Tensor:
+def solve_mesh_flow_DLT(mesh_flow: torch.Tensor, device: torch.device, patch_size: Tuple[int], image_size: Tuple[int]) -> Tuple[torch.Tensor]:
     batch_size = mesh_flow.shape[0]
     unfold_mesh_flow = grid2pointgroup(mesh_flow, (2, 2))
     mesh_grid_X, mesh_grid_Y = torch.meshgrid(torch.arange(start=0, end=image_size[0] + 1, step=patch_size[0], dtype=torch.long, device=device),
         torch.arange(start=0, end=image_size[1] + 1, step=patch_size[1], dtype=torch.long, device=device,),
-        indexing="xy",
+        indexing="ij",
     )
     mesh_grid = torch.cat([mesh_grid_X.unsqueeze(0), mesh_grid_Y.unsqueeze(0)], dim=0).unsqueeze(0).expand(batch_size, 1, 1, 1)
     unfold_mesh_grid = grid2pointgroup(mesh_grid, (2, 2))
@@ -17,7 +17,7 @@ def solve_mesh_flow_DLT(mesh_flow: torch.Tensor, device: torch.device, patch_siz
     solved_matrices = H_scale(solved_matrices, patch_size[0], patch_size[1], batch_size)
 
     # warp image grid points
-    points_grid = torch.meshgrid(torch.arange(image_size[0]), torch.arange(image_size[1]), indexing='xy')
+    points_grid = torch.meshgrid(torch.arange(image_size[0]), torch.arange(image_size[1]), indexing='ij')
     points_grid = torch.cat([points_grid[0].unsqueeze(0), points_grid[1].unsqueeze(0)], dim=0).unsqueeze(0).expand(batch_size, 1, 1, 1)
     grid_unfolder = nn.Unfold(kernel_size=(image_size[0] // patch_size[0], image_size[1] // patch_size[1]), 
         stride=(image_size[0] // patch_size[0], image_size[1] // patch_size[1])
@@ -35,7 +35,7 @@ def solve_mesh_flow_DLT(mesh_flow: torch.Tensor, device: torch.device, patch_siz
         stride=(image_size[0] // patch_size[0], image_size[1] // patch_size[1]))
     warped_points_grid = folder(warped_unfold_points_grid)
 
-    return warped_points_grid
+    return warped_points_grid, solved_matrices
 
 
 def grid2pointgroup(grid:torch.Tensor, kernel_size:Tuple[int]) -> torch.Tensor:
@@ -109,24 +109,24 @@ def spatial_transform_by_grid(img:torch.Tensor, grid:torch.Tensor, device:torch.
     return output 
 
 # Test
-if __name__ == "__main__":
-    from PIL import Image
-    from torchvision import transforms
-    import cv2
-    import numpy as np
-    im = Image.open("/home/wyq/DeepImageStitching-pytorch/align_data/train/input1/000001.jpg")
-    im.save("raw.jpg")
-    im_t = (transforms.ToTensor()(im)).unsqueeze(0)
-    # im_t = F.pad(im_t, (1, 1, 1, 1), 'constant', 0)
-    points_grid = torch.meshgrid(torch.arange(128, dtype=torch.float), torch.arange(128, dtype=torch.float), indexing='ij')
-    points_grid = torch.cat([points_grid[0].unsqueeze(0), points_grid[1].unsqueeze(0)], dim=0).unsqueeze(0)
-    device = torch.device("cpu")
-    out = spatial_transform_by_grid(im_t, points_grid, device)
-    out_im = transforms.ToPILImage()(out[0])
-    out_im.save("test.jpg")
-    a = cv2.imread("test.jpg")
-    b = cv2.imread("raw.jpg")
-    print(((a - b) ** 2).mean())
+# if __name__ == "__main__":
+#     from PIL import Image
+#     from torchvision import transforms
+#     import cv2
+#     import numpy as np
+#     im = Image.open("/home/wyq/DeepImageStitching-pytorch/align_data/train/input1/000001.jpg")
+#     im.save("raw.jpg")
+#     im_t = (transforms.ToTensor()(im)).unsqueeze(0)
+#     # im_t = F.pad(im_t, (1, 1, 1, 1), 'constant', 0)
+#     points_grid = torch.meshgrid(torch.arange(128, dtype=torch.float), torch.arange(128, dtype=torch.float), indexing='ij')
+#     points_grid = torch.cat([points_grid[0].unsqueeze(0), points_grid[1].unsqueeze(0)], dim=0).unsqueeze(0)
+#     device = torch.device("cpu")
+#     out = spatial_transform_by_grid(im_t, points_grid, device)
+#     out_im = transforms.ToPILImage()(out[0])
+#     out_im.save("test.jpg")
+#     a = cv2.imread("test.jpg")
+#     b = cv2.imread("raw.jpg")
+#     print(((a - b) ** 2).mean())
     # im = cv2.imread("/home/wyq/DeepImageStitching-pytorch/align_data/train/input1/000001.jpg")
     # src = np.array([[0, 0], [127, 0], [0, 127], [127, 127]])
     # homograhy, _ = cv2.findHomography(src, src)

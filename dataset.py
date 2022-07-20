@@ -8,7 +8,7 @@ import argparse
 class align_dataset(torch.utils.data.Dataset):
     def __init__(self, args:argparse.ArgumentParser, validation:bool=False) -> None:
         super().__init__()
-        self.dir = args.data_folder
+        # self.dir = args.data_folder
         self.stage = args.stage
         if self.stage == 'train':
             self.dir = args.train_data
@@ -36,8 +36,8 @@ class align_dataset(torch.utils.data.Dataset):
         img2 = Image.open(img2_path).convert("RGB")
         img_name = input_list_1[idx]
 
-        origin_pair, aug_pair = self.data_augmentation(img1, img2, random_data_inverse=self.data_random_inverse)
-        return origin_pair, aug_pair, img_name
+        img2pair = self.data_augmentation(img1, img2, random_data_inverse=self.data_random_inverse)
+        return img2pair, img_name
     
     def __len__(self):
         return len(os.listdir(os.path.join(self.dir, "input1")))
@@ -59,6 +59,10 @@ class align_dataset(torch.utils.data.Dataset):
         img2_aug = transform_jitter(img2)
         img1 = transforms.ToTensor()(img1)
         img2 = transforms.ToTensor()(img2)
+        # img1 = torch.mean(img1, dim=1, keepdim=True)
+        # img2 = torch.mean(img2, dim=1, keepdim=True)
+        # img1_aug = torch.mean(img1_aug, dim=1, keepdim=True)
+        # img2_aug = torch.mean(img2_aug, dim=1, keepdim=True)
         if random_data_inverse:
             p_inverse = torch.rand(size=(1,))[0]
             if p_inverse >= 0.5:
@@ -67,5 +71,8 @@ class align_dataset(torch.utils.data.Dataset):
             else:
                 origin_pair = torch.cat([img2, img1], dim=0)
                 aug_pair = torch.cat([img2_aug, img1_aug], dim=0)
+        else:
+            origin_pair = torch.cat([img1, img2], dim=0)
+            aug_pair = torch.cat([img1_aug, img2_aug], dim=0)
        
-        return origin_pair, aug_pair
+        return torch.cat([origin_pair, aug_pair], dim=0)

@@ -67,7 +67,7 @@ def mesh_flow_upsampling(mesh_flow_tensor:torch.Tensor, mesh_grid_size:Tuple[int
     warped_grid_dense = fold(warped_unfold_grid_dense)
     X, Y = torch.meshgrid(torch.arange(start=0, end=upsample_grid_size[0], step=mesh_grid_size[0] - 1, dtype=torch.long),
         torch.arange(start=0, end=upsample_grid_size[1], step=mesh_grid_size[1] - 1, dtype=torch.long),
-        indexing="xy"
+        indexing="ij"
     )
     warped_grid_dense[:, :, X, Y] /= 2
     warped_grid_dense[:, :, 0, 0] *= 2
@@ -81,12 +81,3 @@ def mesh_flow_upsampling(mesh_flow_tensor:torch.Tensor, mesh_grid_size:Tuple[int
 
     return out
 
-def H_scale(H:torch.Tensor, patch_width:float, patch_height:float, batch_size:int) -> torch.Tensor:
-    M = torch.tensor([[patch_height / 2.0, 0., patch_height / 2.0],
-                        [0., patch_width / 2.0, patch_width / 2.0],
-                        [0., 0., 1.]], dtype=torch.float32)
-    M_inv = torch.linalg.inv(M)
-    M_tile = torch.tile(M.unsqueeze(0), dims=[batch_size, 1, 1])
-    M_inv_tile = torch.tile(M_inv.unsqueeze(0), dims=[batch_size, 1, 1])
-    scaled_H = torch.matmul(torch.matmul(M_inv_tile, H), M_tile)
-    return scaled_H

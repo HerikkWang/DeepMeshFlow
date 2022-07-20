@@ -1,9 +1,8 @@
 import torch.nn as nn
 from typing import *
 
-from mesh_flow_upsample import mesh_flow_upsampling
-from resnet_features import ResNet, resnet34, BasicBlock
-
+from .mesh_flow_upsample import mesh_flow_upsampling
+from .resnet_features import ResNet, resnet34, BasicBlock
 
 
 class feature_extractor(nn.Module):
@@ -26,7 +25,6 @@ class feature_extractor(nn.Module):
     def forward(self, x):
         out = self.extractor(x)
         return out
-
 
 class mask_predictor(nn.Module):
     def __init__(self, in_channels=1) -> None:
@@ -102,9 +100,6 @@ class mesh_estimator_head(nn.Module):
             out = mesh_flow_upsampling(out, self.mesh_grid_size, self.upsample_size, self.image_size, x.shape[0])
         
         return out
-
-
-
 
 if __name__ == "__main__":
     from torchsummary import summary

@@ -16,7 +16,7 @@ parser.add_argument("-c", dest="config", type=str, default="config.yaml", help="
 # parser.add_argument("--lr", type=float, default=1e-4, help="set learning rate")
 args = parser.parse_args()
 # yaml config
-with open(os.path.join("../config", args.config), 'r') as f:
+with open(os.path.join("config", args.config), 'r') as f:
     config = yaml.load(f.read(), yaml.Loader)
 for i in config:
     args.__dict__[i] = config[i]
