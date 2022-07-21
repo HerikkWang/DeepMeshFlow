@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 from typing import *
 
 from .mesh_flow_upsample import mesh_flow_upsampling
@@ -56,27 +57,28 @@ class mask_predictor(nn.Module):
         return out
 
 class mesh_selector(nn.Module):
-    def __init__(self, in_channels=2, out_shape=(3, 17, 17)) -> None:
+    def __init__(self, in_channels=2, out_shape=(3, 2, 17, 17)) -> None:
         super().__init__()
         self.out_shape = out_shape
-        self.out_feature_num = out_shape[0] * out_shape[1] * out_shape[2]
+        self.out_feature_num = out_shape[0] * out_shape[1] * out_shape[2] * out_shape[3]
         self.features = ResNet(BasicBlock, [2, 2, 2, 2], in_channels)
         self.fc = nn.Linear(512, self.out_feature_num)
     
     def forward(self, x):
         out = self.features(x)
         out = self.fc(out)
-        out = out.view(-1, self.out_shape[0], self.out_shape[1], self.out_shape[2])
+        out = out.view(-1, self.out_shape[0], self.out_shape[1], self.out_shape[2], self.out_shape[3])
         return out
 
 mesh_estimator_body = resnet34(in_channels=2)
 
 class mesh_estimator_head(nn.Module):
-    def __init__(self, mesh_grid_size:Tuple[int], upsample_size:Tuple[int], image_size:Tuple[int]) -> None:
+    def __init__(self, mesh_grid_size:Tuple[int], upsample_size:Tuple[int], image_size:Tuple[int], device:torch.device) -> None:
         super().__init__()
         self.mesh_grid_size = mesh_grid_size
         self.upsample_size = upsample_size
         self.image_size = image_size
+        self.device = device
         fc_out_size = mesh_grid_size[0] * mesh_grid_size[1] * 2
         self.fc1 = nn.Sequential(
             nn.Linear(512, 1024),
@@ -95,9 +97,9 @@ class mesh_estimator_head(nn.Module):
         out = self.fc1(x)
         # out = self.fc2(out)
         out = self.fc3(out)
-        out = out.view(out.shape[0], 2, self.mesh_grid_size[0], self.mesh_grid_size[1])
+        out = out.view(x.shape[0], 2, self.mesh_grid_size[0], self.mesh_grid_size[1])
         if self.upsample_size != self.mesh_grid_size:
-            out = mesh_flow_upsampling(out, self.mesh_grid_size, self.upsample_size, self.image_size, x.shape[0])
+            out = mesh_flow_upsampling(out, self.mesh_grid_size, self.upsample_size, self.image_size, x.shape[0], device=self.device)
         
         return out
 

@@ -72,7 +72,7 @@ def train(args):
             # TODO: Does L ab loss should be normalized ?
             L_ab = -1 * torch.abs(feature1_orig - feature2_orig).mean()
             Identity = torch.eye(3, dtype=torch.float, device=device).unsqueeze(0).expand(homography_grid.shape[0], -1, -1)
-            L_inverse = torch.sum(torch.abs(torch.matmul(homography_grid, homography_grid_inv) - Identity))
+            L_inverse = torch.mean(torch.abs(torch.matmul(homography_grid, homography_grid_inv) - Identity))
             loss = ln + ln_inv + args.loss_weight_lambda * L_ab + args.loss_weight_mu * L_inverse
 
             optimizer.zero_grad()

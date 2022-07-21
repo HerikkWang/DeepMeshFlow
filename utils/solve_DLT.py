@@ -7,32 +7,30 @@ import torch
 def solve_mesh_flow_DLT(mesh_flow: torch.Tensor, device: torch.device, patch_size: Tuple[int], image_size: Tuple[int]) -> Tuple[torch.Tensor]:
     batch_size = mesh_flow.shape[0]
     unfold_mesh_flow = grid2pointgroup(mesh_flow, (2, 2))
-    mesh_grid_X, mesh_grid_Y = torch.meshgrid(torch.arange(start=0, end=image_size[0] + 1, step=patch_size[0], dtype=torch.long, device=device),
-        torch.arange(start=0, end=image_size[1] + 1, step=patch_size[1], dtype=torch.long, device=device,),
+    mesh_grid_X, mesh_grid_Y = torch.meshgrid(torch.arange(start=0, end=image_size[0] + 1, step=patch_size[0], dtype=torch.float, device=device),
+        torch.arange(start=0, end=image_size[1] + 1, step=patch_size[1], dtype=torch.float, device=device,),
         indexing="ij",
     )
-    mesh_grid = torch.cat([mesh_grid_X.unsqueeze(0), mesh_grid_Y.unsqueeze(0)], dim=0).unsqueeze(0).expand(batch_size, 1, 1, 1)
+    mesh_grid = torch.cat([mesh_grid_X.unsqueeze(0), mesh_grid_Y.unsqueeze(0)], dim=0).unsqueeze(0).expand(batch_size, -1, -1, -1)
     unfold_mesh_grid = grid2pointgroup(mesh_grid, (2, 2))
     solved_matrices = torchgeometry.get_perspective_transform(unfold_mesh_grid, unfold_mesh_flow + unfold_mesh_grid)
-    solved_matrices = H_scale(solved_matrices, patch_size[0], patch_size[1], batch_size)
+    solved_matrices = H_scale(solved_matrices, patch_size[0], patch_size[1], unfold_mesh_grid.shape[0], device=device)
 
     # warp image grid points
-    points_grid = torch.meshgrid(torch.arange(image_size[0]), torch.arange(image_size[1]), indexing='ij')
-    points_grid = torch.cat([points_grid[0].unsqueeze(0), points_grid[1].unsqueeze(0)], dim=0).unsqueeze(0).expand(batch_size, 1, 1, 1)
-    grid_unfolder = nn.Unfold(kernel_size=(image_size[0] // patch_size[0], image_size[1] // patch_size[1]), 
-        stride=(image_size[0] // patch_size[0], image_size[1] // patch_size[1])
-    )
+    points_grid = torch.meshgrid(torch.arange(image_size[0], dtype=torch.float, device=device), \
+        torch.arange(image_size[1], dtype=torch.float, device=device), indexing='ij')
+    points_grid = torch.cat([points_grid[0].unsqueeze(0), points_grid[1].unsqueeze(0)], dim=0).unsqueeze(0).expand(batch_size, -1, -1, -1)
+    grid_unfolder = nn.Unfold(kernel_size=(patch_size[0], patch_size[1]), stride=(patch_size[0], patch_size[1]))
     # unfold_points_grid shape: [N, 2 * patch_size * patch_size, grid_size * grid_size]
     unfold_points_grid = grid_unfolder(points_grid)
     # after reshape and permutation: [N * grid_size * grid_size, patch_size * patch_size, 2]
-    unfold_points_grid = unfold_points_grid.permute(0, 2, 1).reshape(-1, 2 * patch_size * patch_size).reshape(-1, 2, patch_size * patch_size).permute(0, 2, 1)
-    warped_unfold_points_grid = torchgeometry.core.transform_points(solved_matrices)
+    unfold_points_grid = unfold_points_grid.permute(0, 2, 1).reshape(-1, 2 * patch_size[0] * patch_size[1]).reshape(-1, 2, patch_size[0] * patch_size[1]).permute(0, 2, 1)
+    warped_unfold_points_grid = torchgeometry.core.transform_points(solved_matrices, unfold_points_grid)
 
     # FOLD BACK
-    warped_unfold_points_grid = warped_unfold_points_grid.permute(0, 2, 1).reshape(-1, 2 * patch_size * patch_size).reshape(batch_size, -1, 2 * patch_size * patch_size) \
-        .permute(0, 2, 1)
-    folder = nn.Fold(output_size=image_size, kernel_size=(image_size[0] // patch_size[0], image_size[1] // patch_size[1]), 
-        stride=(image_size[0] // patch_size[0], image_size[1] // patch_size[1]))
+    warped_unfold_points_grid = warped_unfold_points_grid.permute(0, 2, 1).reshape(-1, 2 * patch_size[0] * patch_size[1]). \
+        reshape(batch_size, -1, 2 * patch_size[0] * patch_size[1]).permute(0, 2, 1)
+    folder = nn.Fold(output_size=image_size, kernel_size=(patch_size[0], patch_size[1]), stride=(patch_size[0], patch_size[1]))
     warped_points_grid = folder(warped_unfold_points_grid)
 
     return warped_points_grid, solved_matrices
@@ -43,14 +41,14 @@ def grid2pointgroup(grid:torch.Tensor, kernel_size:Tuple[int]) -> torch.Tensor:
     """
     unfolder = nn.Unfold(kernel_size=kernel_size)
     grid_unfold = unfolder(grid)
-    grid_unfold = grid_unfold.permute(0, 2, 1).reshape(-1, 8).reshape(-1, 2, 4).permute(0, 1, 2)
+    grid_unfold = grid_unfold.permute(0, 2, 1).reshape(-1, 8).reshape(-1, 2, 4).permute(0, 2, 1)
 
     return grid_unfold
 
-def H_scale(H:torch.Tensor, patch_width:float, patch_height:float, batch_size:int) -> torch.Tensor:
+def H_scale(H:torch.Tensor, patch_width:float, patch_height:float, batch_size:int, device:torch.device) -> torch.Tensor:
     M = torch.tensor([[patch_height / 2.0, 0., patch_height / 2.0],
                         [0., patch_width / 2.0, patch_width / 2.0],
-                        [0., 0., 1.]], dtype=torch.float32)
+                        [0., 0., 1.]], dtype=torch.float32, device=device)
     M_inv = torch.linalg.inv(M)
     M_tile = torch.tile(M.unsqueeze(0), dims=[batch_size, 1, 1])
     M_inv_tile = torch.tile(M_inv.unsqueeze(0), dims=[batch_size, 1, 1])
@@ -93,8 +91,6 @@ def spatial_transform_by_grid(img:torch.Tensor, grid:torch.Tensor, device:torch.
     y0_f = y0.float()
     y1_f = y1.float()
     # test
-    print(x0_f[-1], x1_f[-1], y0_f[-1], y1_f[-1])
-    print(x[-1], y[-1])
     
     wa = torch.unsqueeze(((x1_f - x) * (y1_f - y)), 1)
     wb = torch.unsqueeze(((x1_f - x) * (y - y0_f)), 1)
@@ -109,27 +105,13 @@ def spatial_transform_by_grid(img:torch.Tensor, grid:torch.Tensor, device:torch.
     return output 
 
 # Test
-# if __name__ == "__main__":
-#     from PIL import Image
-#     from torchvision import transforms
-#     import cv2
-#     import numpy as np
-#     im = Image.open("/home/wyq/DeepImageStitching-pytorch/align_data/train/input1/000001.jpg")
-#     im.save("raw.jpg")
-#     im_t = (transforms.ToTensor()(im)).unsqueeze(0)
-#     # im_t = F.pad(im_t, (1, 1, 1, 1), 'constant', 0)
-#     points_grid = torch.meshgrid(torch.arange(128, dtype=torch.float), torch.arange(128, dtype=torch.float), indexing='ij')
-#     points_grid = torch.cat([points_grid[0].unsqueeze(0), points_grid[1].unsqueeze(0)], dim=0).unsqueeze(0)
-#     device = torch.device("cpu")
-#     out = spatial_transform_by_grid(im_t, points_grid, device)
-#     out_im = transforms.ToPILImage()(out[0])
-#     out_im.save("test.jpg")
-#     a = cv2.imread("test.jpg")
-#     b = cv2.imread("raw.jpg")
-#     print(((a - b) ** 2).mean())
-    # im = cv2.imread("/home/wyq/DeepImageStitching-pytorch/align_data/train/input1/000001.jpg")
-    # src = np.array([[0, 0], [127, 0], [0, 127], [127, 127]])
-    # homograhy, _ = cv2.findHomography(src, src)
-    # im_out = cv2.warpPerspective(im, homograhy, (128, 128))
-    # print(np.abs(im_out - im).sum())
+if __name__ == "__main__":
+    mesh_flow = torch.randn(8, 2, 17, 17)
+
+    b, c = solve_mesh_flow_DLT(mesh_flow, torch.device("cpu"), (8, 8), (128, 128))
+    print(b.shape, c.shape)
+    # a = torch.arange(16).reshape(2, 2, 2, 2)
+    # b = a + 1
+    # ab = torch.cat([a.unsqueeze(1), b.unsqueeze(1)], dim=1)
+    # c = torch.randn(size=(2, 1, 2, ))
 

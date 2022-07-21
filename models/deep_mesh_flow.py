@@ -1,10 +1,11 @@
 import torch.nn as nn
 import torch
 import argparse
-from .model_parts import *
 
 import sys
 sys.path.append("..")
+
+from models.model_parts import feature_extractor, mask_predictor, mesh_estimator_body, mesh_estimator_head, mesh_selector
 from utils.solve_DLT import solve_mesh_flow_DLT, spatial_transform_by_grid
 
 class DeepMeshFlow(nn.Module):
@@ -18,10 +19,10 @@ class DeepMeshFlow(nn.Module):
         self.feature_extractor = feature_extractor(in_channels=1, out_channels=1)
         self.mask_predictor = mask_predictor(in_channels=1)
         self.estimator_body = mesh_estimator_body
-        self.estimator_head_0 = mesh_estimator_head(args.mesh_size_1, args.mesh_size_3, self.img_size)
-        self.estimator_head_1 = mesh_estimator_head(args.mesh_size_2, args.mesh_size_3, self.img_size)
-        self.estimator_head_2 = mesh_estimator_head(args.mesh_size_3, args.mesh_size_3, self.img_size)
-        self.mesh_selector = mesh_selector(2, (3, 17, 17))
+        self.estimator_head_0 = mesh_estimator_head(args.mesh_size_1, args.mesh_size_3, self.img_size, device=self.device)
+        self.estimator_head_1 = mesh_estimator_head(args.mesh_size_2, args.mesh_size_3, self.img_size, device=self.device)
+        self.estimator_head_2 = mesh_estimator_head(args.mesh_size_3, args.mesh_size_3, self.img_size, device=self.device)
+        self.mesh_selector = mesh_selector(in_channels=2, out_shape=(3, 2, 17, 17))
     
     def forward(self, x):
         input1 = x[:, 0:3, :, :].mean(dim=1, keepdim=True)
@@ -35,21 +36,21 @@ class DeepMeshFlow(nn.Module):
         feature_processed = torch.cat([feature1 * mask1, feature2 * mask2], dim=1)
         out = self.estimator_body(feature_processed)
 
-        mesh_flow_0 = self.estimator_head_0(out)
-        mesh_flow_1 = self.estimator_head_1(out)
-        mesh_flow_2 = self.estimator_head_2(out)
+        mesh_flow_0 = self.estimator_head_0(out).unsqueeze(1)
+        mesh_flow_1 = self.estimator_head_1(out).unsqueeze(1)
+        mesh_flow_2 = self.estimator_head_2(out).unsqueeze(1)
         mesh_flow = torch.cat([mesh_flow_0, mesh_flow_1, mesh_flow_2], dim=1)
         mesh_index = torch.argmax(self.mesh_selector(torch.cat([input1, input2], dim=1)), dim=1, keepdim=True)
-        mesh_out = torch.gather(mesh_flow, dim=1, index=mesh_index)
+        mesh_out = torch.gather(mesh_flow, dim=1, index=mesh_index).squeeze(1)
 
         feature_processed_inv = torch.cat([feature2 * mask2, feature1 * mask1], dim=1)
         out_inv = self.estimator_body(feature_processed_inv)
-        mesh_flow_0_inv = self.estimator_head_0(out_inv)
-        mesh_flow_1_inv = self.estimator_head_1(out_inv)
-        mesh_flow_2_inv = self.estimator_head_2(out_inv)
+        mesh_flow_0_inv = self.estimator_head_0(out_inv).unsqueeze(1)
+        mesh_flow_1_inv = self.estimator_head_1(out_inv).unsqueeze(1)
+        mesh_flow_2_inv = self.estimator_head_2(out_inv).unsqueeze(1)
         mesh_flow_inv = torch.cat([mesh_flow_0_inv, mesh_flow_1_inv, mesh_flow_2_inv], dim=1)
         mesh_index_inv = torch.argmax(self.mesh_selector(torch.cat([input2, input1], dim=1)), dim=1, keepdim=True)
-        mesh_out_inv = torch.gather(mesh_flow_inv, dim=1, index=mesh_index_inv)
+        mesh_out_inv = torch.gather(mesh_flow_inv, dim=1, index=mesh_index_inv).squeeze(1)
         
         # use mesh warp original images
         warped_grid, homography_grid = solve_mesh_flow_DLT(mesh_flow=mesh_out, device=self.device, image_size=self.img_size, patch_size=self.patch_size)
@@ -70,5 +71,7 @@ class DeepMeshFlow(nn.Module):
 
 if __name__ == "__main__":
     from torchsummary import summary
-    model = DeepMeshFlow()
-    print(summary(model, (2, 128, 128), device='cpu'))
+    from config.option import args
+    device = torch.device("cuda:0")
+    model = DeepMeshFlow(args, device=torch.device("cpu"))
+    print(summary(model, (12, 128, 128), device='cpu'))

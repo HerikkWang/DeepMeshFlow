@@ -5,7 +5,7 @@ from typing import *
 from torchgeometry.core.transformations import transform_points
 
 
-def mesh_flow_upsampling(mesh_flow_tensor:torch.Tensor, mesh_grid_size:Tuple[int], upsample_grid_size:Tuple[int], img_size:Tuple[int], batch_size:int):
+def mesh_flow_upsampling(mesh_flow_tensor:torch.Tensor, mesh_grid_size:Tuple[int], upsample_grid_size:Tuple[int], img_size:Tuple[int], batch_size:int, device:torch.device):
     """upsample mesh flow result from mesh grid size to upsampling grid size
 
     Args:
@@ -14,6 +14,7 @@ def mesh_flow_upsampling(mesh_flow_tensor:torch.Tensor, mesh_grid_size:Tuple[int
       upsample_grid_size: mesh grid of high resolutin
       img_size: size of input image
       batch_size: batch size of data
+      device: torch device (cpu or gpu)
     
     Returns:
       upsampled mesh flow tensor with shape: (N, 2, upsample_grid_size[0], upsample_grid_size[1])
@@ -25,8 +26,10 @@ def mesh_flow_upsampling(mesh_flow_tensor:torch.Tensor, mesh_grid_size:Tuple[int
     mesh_flow = mesh_flow.reshape(mesh_flow.shape[0] * mesh_flow.shape[1], -1)
     mesh_flow = mesh_flow.reshape(-1, 2, 4).permute(0, 2, 1)
     # step 2: get mesh grid of mesh_grid size
-    y_t = torch.matmul(torch.ones(mesh_grid_size[0], 1), torch.linspace(0, img_size[1], mesh_grid_size[1]).unsqueeze(0)).unsqueeze(2)
-    x_t = torch.matmul(torch.linspace(0, img_size[0], mesh_grid_size[0]).unsqueeze(1), torch.ones(1, mesh_grid_size[1])).unsqueeze(2)
+    y_t = torch.matmul(torch.ones(mesh_grid_size[0], 1, dtype=torch.float, device=device), \
+      torch.linspace(0, img_size[1], mesh_grid_size[1], dtype=torch.float, device=device).unsqueeze(0)).unsqueeze(2)
+    x_t = torch.matmul(torch.linspace(0, img_size[0], mesh_grid_size[0], dtype=torch.float, device=device).unsqueeze(1), \
+      torch.ones(1, mesh_grid_size[1], dtype=torch.float, device=device)).unsqueeze(2)
     # grid_sparse shape: [batch_size, 2, mesh_grid_size[0], mesh_grid_size[1]]
     grid_sparse = torch.cat([x_t, y_t], dim=2).permute(2, 0, 1).unsqueeze(0).expand(batch_size, -1, -1, -1)
     # step 3: unfold sparse grid
@@ -45,8 +48,10 @@ def mesh_flow_upsampling(mesh_flow_tensor:torch.Tensor, mesh_grid_size:Tuple[int
     # solved_matrices_scaled = H_scale(solved_matrices, patch_width=patch_width, patch_height=patch_height, batch_size=batch_size)
 
     # step 5: get dense grid of upsample_grid_size
-    y_t = torch.matmul(torch.ones(upsample_grid_size[0], 1), torch.linspace(0, img_size[1], upsample_grid_size[1]).unsqueeze(0)).unsqueeze(2)
-    x_t = torch.matmul(torch.linspace(0, img_size[0], upsample_grid_size[0]).unsqueeze(1), torch.ones(1, upsample_grid_size[1])).unsqueeze(2)
+    y_t = torch.matmul(torch.ones(upsample_grid_size[0], 1, dtype=torch.float, device=device), \
+      torch.linspace(0, img_size[1], upsample_grid_size[1], dtype=torch.float, device=device).unsqueeze(0)).unsqueeze(2)
+    x_t = torch.matmul(torch.linspace(0, img_size[0], upsample_grid_size[0], dtype=torch.float, device=device).unsqueeze(1), \
+      torch.ones(1, upsample_grid_size[1], dtype=torch.float, device=device)).unsqueeze(2)
     # grid shape: [batch_size, 2, upsample_grid_size[0], upsample_grid_size[1]]
     grid_dense = torch.cat([x_t, y_t], dim=2).permute(2, 0, 1).unsqueeze(0).expand(batch_size, -1, -1, -1)
     # step 6: unfold dense grid
