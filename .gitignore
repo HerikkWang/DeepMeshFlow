@@ -4,3 +4,4 @@ test.py
 *.jpg
 event*
 *.log
+*.pth

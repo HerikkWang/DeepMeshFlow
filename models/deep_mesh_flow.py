@@ -23,12 +23,21 @@ class DeepMeshFlow(nn.Module):
         self.estimator_head_1 = mesh_estimator_head(args.mesh_size_2, args.mesh_size_3, self.img_size, device=self.device)
         self.estimator_head_2 = mesh_estimator_head(args.mesh_size_3, args.mesh_size_3, self.img_size, device=self.device)
         self.mesh_selector = mesh_selector(in_channels=2, out_shape=(3, 2, 17, 17))
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                # nn.init.xavier_normal_(m.weight)
+                nn.init.kaiming_normal_(
+                    m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
     
     def forward(self, x):
-        input1 = x[:, 0:3, :, :].mean(dim=1, keepdim=True)
-        input2 = x[:, 3:6, :, :].mean(dim=1, keepdim=True)
-        input_orig1 = x[:, 6:9, :, :].mean(dim=1, keepdim=True)
-        input_orig2 = x[:, 9:12, :, :].mean(dim=1, keepdim=True)
+        input_orig1 = x[:, 0:3, :, :].mean(dim=1, keepdim=True)
+        input_orig2 = x[:, 3:6, :, :].mean(dim=1, keepdim=True)
+        input1 = x[:, 6:9, :, :].mean(dim=1, keepdim=True)
+        input2 = x[:, 9:12, :, :].mean(dim=1, keepdim=True)
         feature1 = self.feature_extractor(input1)
         feature2 = self.feature_extractor(input2)
         mask1 = self.mask_predictor(input1)
@@ -41,6 +50,7 @@ class DeepMeshFlow(nn.Module):
         mesh_flow_2 = self.estimator_head_2(out).unsqueeze(1)
         mesh_flow = torch.cat([mesh_flow_0, mesh_flow_1, mesh_flow_2], dim=1)
         mesh_index = torch.argmax(self.mesh_selector(torch.cat([input1, input2], dim=1)), dim=1, keepdim=True)
+        mesh_index = mesh_index.unsqueeze(2).expand(-1, -1, 2, -1, -1)
         mesh_out = torch.gather(mesh_flow, dim=1, index=mesh_index).squeeze(1)
 
         feature_processed_inv = torch.cat([feature2 * mask2, feature1 * mask1], dim=1)
@@ -50,6 +60,7 @@ class DeepMeshFlow(nn.Module):
         mesh_flow_2_inv = self.estimator_head_2(out_inv).unsqueeze(1)
         mesh_flow_inv = torch.cat([mesh_flow_0_inv, mesh_flow_1_inv, mesh_flow_2_inv], dim=1)
         mesh_index_inv = torch.argmax(self.mesh_selector(torch.cat([input2, input1], dim=1)), dim=1, keepdim=True)
+        mesh_index_inv = mesh_index_inv.unsqueeze(2).expand(-1, -1, 2, -1, -1)
         mesh_out_inv = torch.gather(mesh_flow_inv, dim=1, index=mesh_index_inv).squeeze(1)
         
         # use mesh warp original images

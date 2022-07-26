@@ -131,7 +131,7 @@ def train(args):
                 img1_warp = spatial_transform_by_grid(img1, warped_grid, device=device)
                 img2_warp = spatial_transform_by_grid(img2, warped_grid_inv, device=device)
                 img1_mask_warp = spatial_transform_by_grid(ones_mask, warped_grid, device=device)
-                img2_mask_warp = spatial_transform_by_grid(ones_mask, warped_grid, device=device)
+                img2_mask_warp = spatial_transform_by_grid(ones_mask, warped_grid_inv, device=device)
                 img1_mask_warp[torch.where(img1_mask_warp < 0.4)] = 0
                 img2_mask_warp[torch.where(img2_mask_warp < 0.4)] = 0
                 img1_mask_warp = img1_mask_warp.bool()
