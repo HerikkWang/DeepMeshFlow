@@ -58,10 +58,10 @@ def H_scale(H:torch.Tensor, patch_width:float, patch_height:float, batch_size:in
 
 def spatial_transform_by_grid(img:torch.Tensor, grid:torch.Tensor, device:torch.device) -> torch.Tensor:
     # padding the image by 1
-    img = F.pad(img, (1, 1, 1, 1), "constant", 0)
+    # img = F.pad(img, (1, 1, 1, 1), "constant", 0)
     batch_size, channels, height, width = img.shape
-    grid += 1
-    grid = F.pad(grid, (1, 1, 1, 1), "constant", 0)
+    # grid += 1
+    # grid = F.pad(grid, (1, 1, 1, 1), "constant", 0)
     grid = grid.reshape(batch_size, 2, -1)
     x = grid[:, 0, :].reshape(-1)
     y = grid[:, 1, :].reshape(-1)
@@ -101,7 +101,7 @@ def spatial_transform_by_grid(img:torch.Tensor, grid:torch.Tensor, device:torch.
 
     output = wa * Ia + wb * Ib + wc * Ic + wd * Id
     output = output.reshape(batch_size, height, width, channels).permute(0, 3, 1, 2)
-    output = output[:, :, 1:-1, 1:-1]
+    # output = output[:, :, 1:-1, 1:-1]
 
     return output 
 
