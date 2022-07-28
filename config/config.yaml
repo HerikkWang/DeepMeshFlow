@@ -9,7 +9,7 @@ epoch: 100
 #  - 1.
 #  - 4.
 #  - 16.
-batch_size: 4
+batch_size: 8
 lr: 1.0e-4
 weight_decay: 0.96
 print_every_iter: 50
@@ -23,9 +23,9 @@ data_inverse: 0
 # randomly change the order of target image and reference image in training stage
 data_random_inverse: 0
 # argument for colorjitter data augmentation
-brightness: 0.3
-contrast: 0.2
-saturation: 0.2
+brightness: 0.1
+contrast: 0.1
+saturation: 0.1
 # weights of loss item
-loss_weight_lambda: 2.
+loss_weight_lambda: 2
 loss_weight_mu: 0.01

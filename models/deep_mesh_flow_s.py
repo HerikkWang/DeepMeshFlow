@@ -17,7 +17,6 @@ class DeepMeshFlow(nn.Module):
         self.img_size = args.image_size
         self.patch_size = (args.image_size[0] // (args.mesh_size_3[0] - 1), args.image_size[1] // (args.mesh_size_3[1] - 1))
         self.device = device
-        self.feature_extractor = feature_extractor(in_channels=1, out_channels=1)
         self.mask_predictor = mask_predictor(in_channels=1)
         self.estimator_body = mesh_estimator_body
         self.estimator_head_0 = mesh_estimator_head(args.mesh_size_1, args.mesh_size_3, self.img_size, device=self.device)
@@ -35,10 +34,10 @@ class DeepMeshFlow(nn.Module):
                 nn.init.constant_(m.bias, 0)
     
     def forward(self, x):
-        input_orig1 = x[:, 0:3, :, :].mean(dim=1, keepdim=True)
-        input_orig2 = x[:, 3:6, :, :].mean(dim=1, keepdim=True)
-        input1 = x[:, 6:9, :, :].mean(dim=1, keepdim=True)
-        input2 = x[:, 9:12, :, :].mean(dim=1, keepdim=True)
+        input_orig1 = x[:, 0:3, :, :]
+        input_orig2 = x[:, 3:6, :, :]
+        input1 = x[:, 6:9, :, :]
+        input2 = x[:, 9:12, :, :]
         feature1 = self.feature_extractor(input1)
         feature2 = self.feature_extractor(input2)
         mask1 = self.mask_predictor(input1)

@@ -1,3 +1,4 @@
+from cmath import isnan
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -32,8 +33,8 @@ def train(args):
     model = model.to(device)
     train_dataset = align_dataset(args=args)
     val_dataset = align_dataset(args=args, validation=True)
-    train_loader = DataLoader(dataset=train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-    val_loader = DataLoader(dataset=val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    train_loader = DataLoader(dataset=train_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+    val_loader = DataLoader(dataset=val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=1, gamma=args.weight_decay)
 
@@ -61,19 +62,40 @@ def train(args):
         model.train()
         running_loss = [0., 0., 0., 0., 0.]
         print_loss = 0.
+        print_loss_items = [0., 0., 0., 0.,]
         for i, sample_batch in enumerate(train_loader):
             input_tensor = sample_batch[0].to(device)
+            img_names = sample_batch[1]
             # image_name = sample_batch[1].to(device)
             feature1_warp, feature2_warp, feature1_orig, feature2_orig, mask1_orig, mask2_orig, mask1_warp, mask2_warp, \
                 homography_grid, homography_grid_inv, _, _ = model(input_tensor)
 
-            ln = torch.sum(mask1_warp * mask2_orig * torch.abs(feature1_warp - feature2_orig)) / torch.sum(mask1_warp * mask2_orig)
+            ln = torch.sum(mask1_warp * mask2_orig * torch.abs(feature2_orig - feature1_warp)) / torch.sum(mask1_warp * mask2_orig)
+
             ln_inv = torch.sum(mask1_orig * mask2_warp * torch.abs(feature1_orig - feature2_warp)) / torch.sum(mask1_orig * mask2_warp)
             # TODO: Does L ab loss should be normalized ?
             L_ab = -1 * torch.abs(feature1_orig - feature2_orig).mean()
             Identity = torch.eye(3, dtype=torch.float, device=device).unsqueeze(0).expand(homography_grid.shape[0], -1, -1)
             L_inverse = torch.mean(torch.abs(torch.matmul(homography_grid, homography_grid_inv) - Identity))
             loss = ln + ln_inv + args.loss_weight_lambda * L_ab + args.loss_weight_mu * L_inverse
+            if torch.isnan(ln):
+                print("ln is nan.")
+            if torch.isnan(ln_inv):
+                print("ln_inv is nan.")
+            if torch.isnan(L_ab):
+                print("L_ab is nan.")
+            if torch.isnan(L_inverse):
+                print("L_inverse is nan.")
+            if torch.isnan(loss):
+                print(img_names)
+                torch.save({
+                    'state_dict': model.state_dict(),
+                    'epoch': epoch + 1,
+                    'lr':optimizer.state_dict()['param_groups'][0]['lr'],
+                }, "nan.pth")
+                exit()
+                continue
+            # loss = ln + ln_inv + args.loss_weight_lambda * L_ab
 
             optimizer.zero_grad()
             loss.backward()
@@ -84,10 +106,23 @@ def train(args):
             running_loss[3] += L_ab.item()
             running_loss[4] += L_inverse.item()
             print_loss += loss.item()
+            print_loss_items[0] += ln.item()
+            print_loss_items[1] += ln_inv.item()
+            print_loss_items[2] += L_ab.item()
+            print_loss_items[3] += L_inverse.item()
+            # torch.save({
+            #         'state_dict': model.state_dict(),
+            #         'epoch': epoch + 1,
+            #         'lr':optimizer.state_dict()['param_groups'][0]['lr'],
+            #     }, "before_nan.pth")
             
             if (i + 1) % print_every_iter == 0:
-                logger.info('[{}, {}] running_loss = {:.5f}, learning_rate = {:.7f}'.format(epoch + 1, i + 1, print_loss / print_every_iter, optimizer.state_dict()['param_groups'][0]['lr']))                
+                logger.info('[{}, {}] running_loss = {:.5f}, ln = {:.5f}, ln_inv = {:.5f}, L_ab = {:.5f}, L_inversable = {:.5f}, learning_rate = {:.7f}'. \
+                    format(epoch + 1, i + 1, print_loss / print_every_iter, print_loss_items[0] / print_every_iter, print_loss_items[1] / print_every_iter, print_loss_items[2] / print_every_iter, print_loss_items[3] / print_every_iter,\
+                        optimizer.state_dict()['param_groups'][0]['lr']))                
                 print_loss = 0.
+                for t in range(len(print_loss_items)):
+                    print_loss_items[t] = 0
             if (i + 1) % record_every_iter == 0:
                 writer.add_scalar("loss/Ln_ab", running_loss[1] / record_every_iter, tb_index)
                 writer.add_scalar("loss/Ln_ba", running_loss[2] / record_every_iter, tb_index)

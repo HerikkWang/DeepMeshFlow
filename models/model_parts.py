@@ -60,14 +60,14 @@ class mesh_selector(nn.Module):
     def __init__(self, in_channels=2, out_shape=(3, 2, 17, 17)) -> None:
         super().__init__()
         self.out_shape = out_shape
-        self.out_feature_num = out_shape[0] * out_shape[1] * out_shape[2] * out_shape[3]
+        self.out_feature_num = out_shape[0] * out_shape[1] * out_shape[2]
         self.features = ResNet(BasicBlock, [2, 2, 2, 2], in_channels)
         self.fc = nn.Linear(512, self.out_feature_num)
     
     def forward(self, x):
         out = self.features(x)
         out = self.fc(out)
-        out = out.view(-1, self.out_shape[0], self.out_shape[1], self.out_shape[2], self.out_shape[3])
+        out = out.view(-1, self.out_shape[0], self.out_shape[1], self.out_shape[2])
         return out
 
 mesh_estimator_body = resnet34(in_channels=2)

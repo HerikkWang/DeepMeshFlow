@@ -21,6 +21,6 @@ X = torch.linalg.solve(A, b)
 - pytorch data format: (NCHW)
 
 ## Code Issues:
-Problem in spatial transformer function:  
+- Problem in spatial transformer function:  
 When using identity homography matrix, warping result is not the same as input image. This problem can be fixed by padding pixel (width 1) around image. But whether this solution is the best needs to be further discussed.
-
+- Unregular homography transformation will cause negative values in transformed tensor.
