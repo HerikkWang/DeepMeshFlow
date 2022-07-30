@@ -87,12 +87,32 @@ def train(args):
             if torch.isnan(L_inverse):
                 print("L_inverse is nan.")
             if torch.isnan(loss):
-                print(img_names)
+                # print(img_names)
                 torch.save({
                     'state_dict': model.state_dict(),
                     'epoch': epoch + 1,
                     'lr':optimizer.state_dict()['param_groups'][0]['lr'],
                 }, "nan.pth")
+                torch.save(sample_batch[0], "input_tensor.pt")
+                torch.save(mask1_orig, "mask1_orig.pt")
+                torch.save(mask2_warp, "mask2_warp.pt")
+                torch.save(feature1_orig, "feature1_orig.pt")
+                torch.save(feature2_warp, "feature2_warp.pt")
+                # read_model_dict = torch.load("nan.pth")['state_dict']
+                # model.load_state_dict(read_model_dict)
+                # in_tensor = torch.load("input_tensor.pt").to(device)
+                # feature1_warp, feature2_warp, feature1_orig, feature2_orig, mask1_orig, mask2_orig, mask1_warp, mask2_warp, \
+                # homography_grid, homography_grid_inv, _, _ = model(in_tensor)
+                # ln = torch.sum(mask1_warp * mask2_orig * torch.abs(feature2_orig - feature1_warp)) / torch.sum(mask1_warp * mask2_orig)
+
+                # ln_inv = torch.sum(mask1_orig * mask2_warp * torch.abs(feature1_orig - feature2_warp)) / torch.sum(mask1_orig * mask2_warp)
+                # # TODO: Does L ab loss should be normalized ?
+                # L_ab = -1 * torch.abs(feature1_orig - feature2_orig).mean()
+                # Identity = torch.eye(3, dtype=torch.float, device=device).unsqueeze(0).expand(homography_grid.shape[0], -1, -1)
+                # L_inverse = torch.mean(torch.abs(torch.matmul(homography_grid, homography_grid_inv) - Identity))
+                # loss = ln + ln_inv + args.loss_weight_lambda * L_ab + args.loss_weight_mu * L_inverse
+                # if torch.isnan(ln_inv):
+                #     print("Test: ln_inv is nan.")
                 exit()
                 continue
             # loss = ln + ln_inv + args.loss_weight_lambda * L_ab
