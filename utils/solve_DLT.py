@@ -10,19 +10,19 @@ def solve_mesh_flow_DLT(mesh_flow: torch.Tensor, device: torch.device, patch_siz
     unfold_mesh_flow = grid2pointgroup(mesh_flow, (2, 2))
     mesh_grid_X, mesh_grid_Y = torch.meshgrid(torch.arange(start=0, end=image_size[0] + 1, step=patch_size[0], dtype=torch.float, device=device),
         torch.arange(start=0, end=image_size[1] + 1, step=patch_size[1], dtype=torch.float, device=device,),
-        indexing="ij",
+        indexing="xy",
     )
     mesh_grid = torch.cat([mesh_grid_X.unsqueeze(0), mesh_grid_Y.unsqueeze(0)], dim=0).unsqueeze(0).expand(batch_size, -1, -1, -1)
     unfold_mesh_grid = grid2pointgroup(mesh_grid, (2, 2))
     solved_matrices = torchgeometry.get_perspective_transform(unfold_mesh_grid + unfold_mesh_flow, unfold_mesh_grid)
+
+    # **Whether scale the homography matrices**
     # solved_matrices = H_scale(solved_matrices, patch_size[0], patch_size[1], unfold_mesh_grid.shape[0], device=device)
 
     # sort pixels into grid of mesh
     warped_mesh_grid = unfold_mesh_grid + unfold_mesh_flow
-    # print(warped_mesh_grid.reshape(-1, 2, 2, 2)[0, 0, ...])
-    # exit()
     points_grid = torch.meshgrid(torch.arange(start=0.5, end=image_size[0], step=1, dtype=torch.float, device=device), \
-        torch.arange(start=0.5, end=image_size[1], step=1, dtype=torch.float, device=device), indexing='ij')
+        torch.arange(start=0.5, end=image_size[1], step=1, dtype=torch.float, device=device), indexing='xy')
     points_grid = torch.cat([points_grid[0].unsqueeze(2), points_grid[1].unsqueeze(2)], dim=2).unsqueeze(0).expand(warped_mesh_grid.shape[0], -1, -1, -1)
     warped_mesh_grid = warped_mesh_grid.reshape(-1, 2, 2, 2)
     def GetCross(point1, point2, points_grid, mesh_grid):
@@ -37,39 +37,70 @@ def solve_mesh_flow_DLT(mesh_flow: torch.Tensor, device: torch.device, patch_siz
     cross34 = GetCross((1, 1), (0, 1), points_grid, warped_mesh_grid)
     cross41 = GetCross((0, 1), (0, 0), points_grid, warped_mesh_grid)
     points_grid_mask = torch.bitwise_and((cross12 * cross34) >= 0, (cross23 * cross41) >= 0,).float()
-    # print(points_grid_mask.shape)
 
     points_grid = points_grid.reshape(-1, image_size[0] * image_size[1], 2)
     warped_points_grid = torchgeometry.core.transform_points(solved_matrices, points_grid).reshape(batch_size, -1, image_size[0], image_size[1], 2)
-    # TODO: 重合线上的点如何聚合
     points_grid_mask = points_grid_mask.reshape(batch_size, -1, image_size[0], image_size[1], 1)
     warped_points = (warped_points_grid * points_grid_mask).sum(dim=1) / points_grid_mask.sum(dim=1)
-    torch.save(points_grid_mask.sum(dim=1), "test.pt")
     warped_points = warped_points.permute(0, 3, 1, 2)
-    # print(warped_points_grid.shape)
-    # print(warped_points.shape)
-    # exit()
-
-    # warp image grid points
-    # points_grid = torch.meshgrid(torch.arange(image_size[0], dtype=torch.float, device=device), \
-    #     torch.arange(image_size[1], dtype=torch.float, device=device), indexing='ij')
-    # points_grid = torch.cat([points_grid[0].unsqueeze(0), points_grid[1].unsqueeze(0)], dim=0).unsqueeze(0).expand(batch_size, -1, -1, -1)
-    # grid_unfolder = nn.Unfold(kernel_size=(patch_size[0], patch_size[1]), stride=(patch_size[0], patch_size[1]))
-    # # unfold_points_grid shape: [N, 2 * patch_size * patch_size, grid_size * grid_size]
-    # unfold_points_grid = grid_unfolder(points_grid)
-    # # after reshape and permutation: [N * grid_size * grid_size, patch_size * patch_size, 2]
-    # unfold_points_grid = unfold_points_grid.permute(0, 2, 1).reshape(-1, 2 * patch_size[0] * patch_size[1]).reshape(-1, 2, patch_size[0] * patch_size[1]).permute(0, 2, 1)
-    # warped_unfold_points_grid = torchgeometry.core.transform_points(solved_matrices, unfold_points_grid)
-    # # print("warped_unfold_points_grid:", warped_unfold_points_grid[3])
-
-    # # FOLD BACK
-    # warped_unfold_points_grid = warped_unfold_points_grid.permute(0, 2, 1).reshape(-1, 2 * patch_size[0] * patch_size[1]). \
-    #     reshape(batch_size, -1, 2 * patch_size[0] * patch_size[1]).permute(0, 2, 1)
-    # folder = nn.Fold(output_size=image_size, kernel_size=(patch_size[0], patch_size[1]), stride=(patch_size[0], patch_size[1]))
-    # warped_points_grid = folder(warped_unfold_points_grid)
-    # print(warped_points_grid)
 
     return warped_points, solved_matrices
+
+def solve_mesh_flow_DLT_triangle(mesh_flow: torch.Tensor, device: torch.device, patch_size: Tuple[int], image_size: Tuple[int]) -> Tuple[torch.Tensor]:
+    # TODO: In future development, Delaunay mesh calculation should be completed outside the function
+    from scipy.spatial import Delaunay
+    batch_size = mesh_flow.shape[0]
+    mesh_grid_X, mesh_grid_Y = torch.meshgrid(torch.arange(start=0, end=image_size[0] + 1, step=patch_size[0], dtype=torch.float, device=device),
+        torch.arange(start=0, end=image_size[1] + 1, step=patch_size[1], dtype=torch.float, device=device,),
+        indexing="xy",
+    )
+    mesh_grid = torch.cat([mesh_grid_X.unsqueeze(0), mesh_grid_Y.unsqueeze(0)], dim=0)
+    mesh_grid_flat = mesh_grid.permute(1, 2, 0).reshape(-1, 2)
+    tris = Delaunay(mesh_grid_flat.cpu().numpy())
+    tris_samples_indices = torch.from_numpy(tris.simplices).type(torch.int64)
+    origin_tris_samples = mesh_grid_flat[tris_samples_indices].unsqueeze(0).expand(batch_size, -1, -1, -1)
+    origin_mesh_grid = torch.cat([mesh_grid_X.unsqueeze(0), mesh_grid_Y.unsqueeze(0)], dim=0).unsqueeze(0).expand(batch_size, -1, -1, -1)
+    warped_mesh_grid = (origin_mesh_grid + mesh_flow).permute(0, 2, 3, 1).reshape(batch_size, -1, 2)
+    warped_tris_samples = warped_mesh_grid[:, tris_samples_indices, :]
+    solved_matrices = solve_affine_DLT(warped_tris_samples.reshape(-1, 3, 2), origin_tris_samples.reshape(-1, 3, 2), device=device)
+
+    points_grid = torch.meshgrid(torch.arange(start=0.5, end=image_size[0], step=1, dtype=torch.float, device=device), \
+        torch.arange(start=0.5, end=image_size[1], step=1, dtype=torch.float, device=device), indexing='xy')
+    points_grid = torch.cat([points_grid[0].unsqueeze(2), points_grid[1].unsqueeze(2)], dim=2).unsqueeze(0).expand(origin_tris_samples.reshape(-1, 3, 2).shape[0], -1, -1, -1)
+
+    def GetCross(point1, point2, points_grid, mesh_grid):
+        cross_product = (mesh_grid[:, 0:1, point2:point2 + 1, 0] - mesh_grid[:, 0:1, point1:point1 + 1, 0]) * (points_grid[:, :, :, 1] - mesh_grid[:, 0:1, point1:point1 + 1, 1]) - \
+                (points_grid[:, :, :, 0] - mesh_grid[:, 0:1, point1:point1 + 1, 0]) * (mesh_grid[:, 0:1, point2:point2 + 1, 1] - mesh_grid[:, 0:1, point1:point1 + 1, 1])
+        return cross_product
+
+    warped_tris_samples = warped_tris_samples.reshape(-1, 1, 3, 2)
+    cross12 = GetCross(0, 1, points_grid, warped_tris_samples)
+    cross23 = GetCross(1, 2, points_grid, warped_tris_samples)
+    cross31 = GetCross(2, 0, points_grid, warped_tris_samples)
+    points_grid_mask = torch.bitwise_and((cross12 * cross23) >= 0, (cross23 * cross31) >= 0,).float()
+    points_grid = points_grid.reshape(-1, image_size[0] * image_size[1], 2)
+    # print(solved_matrices.shape, points_grid.shape)
+    warped_points_grid = torchgeometry.core.transform_points(solved_matrices, points_grid).reshape(batch_size, -1, image_size[0], image_size[1], 2)
+    points_grid_mask = points_grid_mask.reshape(batch_size, -1, image_size[0], image_size[1], 1)
+    warped_points = (warped_points_grid * points_grid_mask).sum(dim=1) / points_grid_mask.sum(dim=1)
+    # torch.save(points_grid_mask.sum(dim=1), "test.pt")
+    warped_points = warped_points.permute(0, 3, 1, 2)
+
+    return warped_points, solved_matrices
+
+def solve_affine_DLT(points1:torch.Tensor, points2:torch.Tensor, device:torch.device) -> torch.Tensor:
+    batch_size = points1.shape[0]
+    A1 = torch.zeros((batch_size, 6, 6), dtype=torch.float, device=device)
+    A1[:, 0:3, 0:2] = points1
+    A1[:, 3:6, 3:5] = points1
+    A1[:, 0:3, 2] = 1.
+    A1[:, 3:6, 5] = 1.
+    b = points2.permute(0, 2, 1).reshape(batch_size, -1)
+    H_6 = torch.linalg.solve(A1, b)
+    H_constant = torch.zeros(size=[batch_size, 3], device=device, dtype=torch.float)
+    H_constant[:, 2] = 1.
+    H_9 = torch.concat([H_6, H_constant], dim=1).reshape(batch_size, 3, 3)
+    return H_9  
 
 def grid2pointgroup(grid:torch.Tensor, kernel_size:Tuple[int]) -> torch.Tensor:
     """Unfold grid for solving homograhpy matrices
@@ -91,11 +122,7 @@ def H_scale(H:torch.Tensor, patch_width:float, patch_height:float, batch_size:in
     return scaled_H
 
 def spatial_transform_by_grid(img:torch.Tensor, grid:torch.Tensor, device:torch.device) -> torch.Tensor:
-    # padding the image by 1
-    # img = F.pad(img, (1, 1, 1, 1), "constant", 0)
     batch_size, channels, height, width = img.shape
-    # grid += 1
-    # grid = F.pad(grid, (1, 1, 1, 1), "constant", 0)
     grid = grid.reshape(batch_size, 2, -1) - 0.5
     x = grid[:, 0, :].reshape(-1)
     y = grid[:, 1, :].reshape(-1)
@@ -111,12 +138,12 @@ def spatial_transform_by_grid(img:torch.Tensor, grid:torch.Tensor, device:torch.
 
     base = (torch.arange(batch_size, device=device, dtype=torch.float) * width * height).reshape(-1, 1)
     base = torch.matmul(base, torch.ones((1, height * width), dtype=torch.float, device=device)).view(-1).long()
-    base_x0 = base + x0 * width
-    base_x1 = base + x1 * width
-    idx_a = base_x0 + y0
-    idx_b = base_x1 + y0
-    idx_c = base_x0 + y1
-    idx_d = base_x1 + y1
+    base_y0 = base + y0 * width
+    base_y1 = base + y1 * width
+    idx_a = base_y0 + x0
+    idx_b = base_y1 + x0
+    idx_c = base_y0 + x1
+    idx_d = base_y1 + x1
 
     im_flat = img.permute(0, 2, 3, 1).reshape(-1, channels).float()
     Ia, Ib, Ic, Id = im_flat[idx_a], im_flat[idx_b], im_flat[idx_c], im_flat[idx_d]
@@ -125,40 +152,51 @@ def spatial_transform_by_grid(img:torch.Tensor, grid:torch.Tensor, device:torch.
     x1_f = x1.float()
     y0_f = y0.float()
     y1_f = y1.float()
-    # test
     
     wa = torch.unsqueeze(((x1_f - x) * (y1_f - y)), 1)
     wb = torch.unsqueeze(((x1_f - x) * (y - y0_f)), 1)
     wc = torch.unsqueeze(((x - x0_f) * (y1_f - y)), 1)
     wd = torch.unsqueeze(((x - x0_f) * (y - y0_f)), 1)
-    # print(wa, wb, wc, wd)
+
 
     output = wa * Ia + wb * Ib + wc * Ic + wd * Id
     output = output.reshape(batch_size, height, width, channels).permute(0, 3, 1, 2)
-    # output = output[:, :, 1:-1, 1:-1]
 
     return output 
 
-# def point_mask(p1, p2, p3, p4, coors_map):
-#     coors_map[:, :, 1] - p1[] 
 
 # Test
 if __name__ == "__main__":
     from PIL import Image
     from torchvision import transforms
-    mesh_flow = torch.randn(8, 2, 17, 17)
+    import cv2
+    import sys
+    sys.path.append("..")
+    from models.mesh_flow_upsample import mesh_flow_upsampling
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    # mesh_flow = torch.randn(8, 2, 17, 17)
     # mesh_flow = torch.tensor([(1, 1), (1, 1), (10, 1), (10, 1)], dtype=torch.float).permute(1, 0).reshape(2, 2, 2).unsqueeze(0)
-    mesh_flow = torch.tensor([(0, 0), (0, 0), (0, 0), (0, 0), (500, 400), (0, 0), (0, 0), (0, 0), (0, 0)], dtype=torch.float).permute(1, 0).reshape(2, 3, 3).unsqueeze(0)
+    mesh_flow = torch.tensor([(0, 0), (0, 0), (0, 0), (0, 0), (-100, -100), (0, 0), (0, 0), (0, 0), (0, 0)], dtype=torch.float, device=torch.device("cpu")).permute(1, 0).reshape(2, 3, 3).unsqueeze(0)
+    mesh_flow = mesh_flow_upsampling(mesh_flow, (3, 3), (9, 9), (1280, 1280), 1, torch.device("cpu"))
     # print(mesh_flow)
+    # exit()
     # mesh_flow = torch.tensor([(0, 0), (0, 0), (-5, 1), (5, 1)], dtype=torch.float).permute(1, 0).reshape(2, 2, 2).unsqueeze(0)
 
-    b, c = solve_mesh_flow_DLT(mesh_flow, torch.device("cpu"), (1440, 1440), (2880, 2880))
+    b, c = solve_mesh_flow_DLT_triangle(mesh_flow, torch.device("cpu"), (160, 160), (1280, 1280))
+    # cv_im = cv2.imread("../im_test/square.jpg")
+    # b_x = b[0, 0, :, :].numpy()
+    # b_y = b[0, 1, :, :].numpy()
+    # out = cv2.remap(cv_im, b_x, b_y, cv2.INTER_LINEAR)
+    # cv2.imwrite("../im_test/warp_square_remap.jpg", out)
+    # a = solve_mesh_flow_DLT_triangle(mesh_flow, torch.device("cpu"), (64, 64), (128, 128))
     # print(b)
-    img = Image.open("../im_test/square.jpg").convert("RGB")
+    img = Image.open("../im_test/square_s.jpg").convert("RGB")
     input_tensor = transforms.ToTensor()(img).unsqueeze(0)
+    input_tensor = input_tensor.to(device=torch.device("cpu"))
     warp_tensor = spatial_transform_by_grid(input_tensor, b, torch.device("cpu"))
     warp_img = transforms.ToPILImage()(warp_tensor.squeeze(0))
-    warp_img.save("../im_test/warp_square.jpg")
+    warp_img.save("../im_test/warp_square_s.jpg")
     # print(torch.where(warp_mask < 0))
     # a = torch.arange(16).reshape(2, 2, 2, 2)
     # b = a + 1

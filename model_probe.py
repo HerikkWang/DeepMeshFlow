@@ -5,6 +5,8 @@ from PIL import Image
 from dataset import align_dataset
 from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
+import cv2
+import numpy as np
 
 # device = torch.device("cuda:0")
 # model = DeepMeshFlow(args, device=device)
@@ -28,18 +30,18 @@ from torchvision import transforms
 # im2 = transforms.ToTensor()(im2).unsqueeze(0)
 # input_tensor = torch.cat([im1, im2, im1_aug, im2_aug], dim=1)
 # input_tensor = torch.load("input_tensor.pt").to(device)
-mask1_orig = torch.load("mask1_orig.pt")
-mask2_warp = torch.load("mask2_warp.pt")
-feature1_orig = torch.load("feature1_orig.pt")
-feature2_warp = torch.load("feature2_warp.pt")
-if torch.any(torch.isnan(mask1_orig)):
-    print("debug1")
-if torch.any(torch.isnan(mask2_warp)):
-    print("debug2")
-if torch.any(torch.isnan(feature1_orig)):
-    print("debug3")
-if torch.any(torch.isnan(feature2_warp)):
-    print("debug4")
+# mask1_orig = torch.load("mask1_orig.pt")
+# mask2_warp = torch.load("mask2_warp.pt")
+# feature1_orig = torch.load("feature1_orig.pt")
+# feature2_warp = torch.load("feature2_warp.pt")
+# if torch.any(torch.isnan(mask1_orig)):
+#     print("debug1")
+# if torch.any(torch.isnan(mask2_warp)):
+#     print("debug2")
+# if torch.any(torch.isnan(feature1_orig)):
+#     print("debug3")
+# if torch.any(torch.isnan(feature2_warp)):
+#     print("debug4")
 
 # for i in range(10):
 #     im_aug = transforms.ColorJitter(brightness=0.3, contrast=0.2, saturation=0.2)(im1)
@@ -75,3 +77,17 @@ if torch.any(torch.isnan(feature2_warp)):
 #     print("L_inverse is nan.")
 
     # print(torch.isnan(feature1_orig))
+
+point_src1 = np.float32([[0, 0], [64, 0], [64, 64], [0, 64]])
+point_dst1 = np.float32([[0, 0], [64, 0], [64, 94], [0, 64]])
+point_src2 = np.float32([[0, 64], [64, 64], [0, 128], [64, 128]])
+point_dst2 = np.float32([[0, 64], [64, 94], [0, 128], [64, 128]])
+H1 = cv2.getPerspectiveTransform(point_dst1, point_src1)
+H2 = cv2.getPerspectiveTransform(point_dst2, point_src2)
+test_point = np.array([32, 79, 1], dtype=np.float32)
+x1 = (test_point * H1[0]).sum() / (test_point * H1[2]).sum()
+y1 = (test_point * H1[1]).sum() / (test_point * H1[2]).sum()
+x2 = (test_point * H2[0]).sum() / (test_point * H2[2]).sum()
+y2 = (test_point * H2[1]).sum() / (test_point * H2[2]).sum()
+print(x1, y1, x2, y2)
+print(H1)

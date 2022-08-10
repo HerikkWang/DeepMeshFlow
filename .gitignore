@@ -6,3 +6,4 @@ event*
 *.log
 *.pth
 *.pt
+.ipynb_checkpoints/

@@ -76,3 +76,4 @@ class align_dataset(torch.utils.data.Dataset):
             aug_pair = torch.cat([img1_aug, img2_aug], dim=0)
        
         return torch.cat([origin_pair, aug_pair], dim=0)
+        

@@ -68,16 +68,16 @@ class DeepMeshFlow(nn.Module):
         # use mesh warp original images
         warped_grid, homography_grid = solve_mesh_flow_DLT(mesh_flow=mesh_out, device=self.device, image_size=self.img_size, patch_size=self.patch_size)
         warped_grid_inv, homography_grid_inv = solve_mesh_flow_DLT(mesh_flow=mesh_out_inv, device=self.device, image_size=self.img_size, patch_size=self.patch_size)
-        im1_warp = F.relu(spatial_transform_by_grid(input_orig1, warped_grid, device=self.device))
-        im2_warp = F.relu(spatial_transform_by_grid(input_orig2, warped_grid_inv, device=self.device))
+        im1_warp = spatial_transform_by_grid(input_orig1, warped_grid, device=self.device)
+        im2_warp = spatial_transform_by_grid(input_orig2, warped_grid_inv, device=self.device)
         feature1_warp = self.feature_extractor(im1_warp)
         feature2_warp = self.feature_extractor(im2_warp)
         feature1_orig = self.feature_extractor(input_orig1)
         feature2_orig = self.feature_extractor(input_orig2)
         mask1_orig = self.mask_predictor(input_orig1)
         mask2_orig = self.mask_predictor(input_orig2)
-        mask1_warp = F.relu(spatial_transform_by_grid(mask1_orig, warped_grid, device=self.device))
-        mask2_warp = F.relu(spatial_transform_by_grid(mask2_orig, warped_grid_inv, device=self.device))
+        mask1_warp = spatial_transform_by_grid(mask1_orig, warped_grid, device=self.device)
+        mask2_warp = spatial_transform_by_grid(mask2_orig, warped_grid_inv, device=self.device)
 
         return feature1_warp, feature2_warp, feature1_orig, feature2_orig, mask1_orig, mask2_orig, mask1_warp, mask2_warp, \
             homography_grid, homography_grid_inv, warped_grid, warped_grid_inv
