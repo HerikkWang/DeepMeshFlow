@@ -1,32 +1,20 @@
-from ast import Del
-import numpy as np
-# from skimage.transform import PiecewiseAffineTransform, warp
-import cv2
-from scipy import spatial
+from torch.utils.tensorboard import SummaryWriter
 import torch
-# from skimage import io
+from torchvision import transforms
+from PIL import Image
+import numpy as np
+img = Image.open("im_test/aug0.jpg").convert("RGB")
+im_tensor = transforms.ToTensor()(img)
+# img[0] = np.arange(0, 10000).reshape(100, 100) / 10000
+# img[1] = 1 - np.arange(0, 10000).reshape(100, 100) / 10000
 
-# im = io.imread("im_test/square.jpg")
+# img_HWC = np.zeros((100, 100, 3))
+# img_HWC[:, :, 0] = np.arange(0, 10000).reshape(100, 100) / 10000
+# img_HWC[:, :, 1] = 1 - np.arange(0, 10000).reshape(100, 100) / 10000
 
-# src_cols = np.linspace(0, 2880, 3)
-# src_rows = np.linspace(0, 2880, 3)
-# src_rows, src_cols = np.meshgrid(src_rows, src_cols)
-# src = np.dstack([src_cols.flat, src_rows.flat])[0]
-# print(src)
-# dst = src.copy()
-# dst[4] = [1940., 1940.]
-# dst[0] = [100., 100.]
-# dst[8] = [2780., 2780.]
-# # spatial.Delaunay()
-# tform = PiecewiseAffineTransform()
-# tform.estimate(src, dst)
-# out = warp(im, tform)
-# io.imsave("res.jpg", out)
+writer = SummaryWriter()
+writer.add_image('my_image', im_tensor, 0)
 
-from torch_geometric.data import Data
-from torch_geometric.transforms import Delaunay
-# from scipy.spatial import Delaunay
-pos = torch.tensor([[-1, -1], [-1, 1], [1, 1], [1, -1]], dtype=torch.float)
-data = Data(pos=pos)
-data = Delaunay()(data)
-print(data)
+# If you have non-default dimension setting, set the dataformats argument.
+# writer.add_image('my_image_HWC', img_HWC, 0, dataformats='HWC')
+writer.close()

@@ -73,7 +73,7 @@ class mesh_selector(nn.Module):
 mesh_estimator_body = resnet34(in_channels=2)
 
 class mesh_estimator_head(nn.Module):
-    def __init__(self, mesh_grid_size:Tuple[int], upsample_size:Tuple[int], image_size:Tuple[int], device:torch.device) -> None:
+    def __init__(self, mesh_grid_size:Tuple[int], upsample_size:Tuple[int], image_size:Tuple[int], device:torch.device, in_channels=512) -> None:
         super().__init__()
         self.mesh_grid_size = mesh_grid_size
         self.upsample_size = upsample_size
@@ -81,7 +81,7 @@ class mesh_estimator_head(nn.Module):
         self.device = device
         fc_out_size = mesh_grid_size[0] * mesh_grid_size[1] * 2
         self.fc1 = nn.Sequential(
-            nn.Linear(512, 1024),
+            nn.Linear(in_channels, 512),
             nn.ReLU(),
         )
         # self.fc2 = nn.Sequential(
@@ -90,7 +90,7 @@ class mesh_estimator_head(nn.Module):
         # )
 
         self.fc3 = nn.Sequential(
-            nn.Linear(1024, fc_out_size),
+            nn.Linear(512, fc_out_size),
         )
     
     def forward(self, x):

@@ -59,10 +59,6 @@ class align_dataset(torch.utils.data.Dataset):
         img2_aug = transform_jitter(img2)
         img1 = transforms.ToTensor()(img1)
         img2 = transforms.ToTensor()(img2)
-        # img1 = torch.mean(img1, dim=1, keepdim=True)
-        # img2 = torch.mean(img2, dim=1, keepdim=True)
-        # img1_aug = torch.mean(img1_aug, dim=1, keepdim=True)
-        # img2_aug = torch.mean(img2_aug, dim=1, keepdim=True)
         if random_data_inverse:
             p_inverse = torch.rand(size=(1,))[0]
             if p_inverse >= 0.5:

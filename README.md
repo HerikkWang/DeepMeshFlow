@@ -6,6 +6,7 @@ This is a PyTorch reproduction of Paper: [DeepMeshFlow: Content Adaptive Mesh De
 - torchgeometry
 - opencv-python
 - numpy
+- scipy
 ## Modification of torchgeometry
 Function ```torch.gesv``` used in torchgeometry is no longer adopted by pytorch of high version, so the code in torchgeometry/core/imgwarp.py (line 258) should be adjusted as follow:
 ```python
